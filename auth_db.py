@@ -1,6 +1,7 @@
 import sqlite3
 
-conn = sqlite3.connect("mytodos.db", check_same_thread=False)
+# We changed the name to force a fresh start!
+conn = sqlite3.connect("mytodos_pro.db", check_same_thread=False)
 csr = conn.cursor()
 
 # Create table with new columns for Date, Time, and Priority
