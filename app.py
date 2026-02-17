@@ -2,9 +2,9 @@ import streamlit as st
 from auth_db import csr, conn
 import datetime
 import pandas as pd
-import io
+import io 
 
-# Page Configuration (Browser Tab Title & Icon)
+# Page Configuration
 st.set_page_config(page_title="Pro Todo App", page_icon="✅", layout="centered")
 
 st.title("✅ Pro Task Manager")
@@ -53,42 +53,47 @@ if not st.session_state.authenticated:
 # MAIN APP DASHBOARD
 # -------------------------
 else:
-    # Sidebar for User Info & Logout
+    # --- SIDEBAR ---
     with st.sidebar:
         st.write(f"👤 **{st.session_state.username}**")
+        
+        # Logout
         if st.button("Logout"):
             st.session_state.authenticated = False
             st.rerun()
+        
         st.divider()
-        st.info("💡 Tip: Use the 'Priority' filter to focus on urgent tasks.")
+        
+        # --- EXCEL DOWNLOADER ---
+        st.subheader("📥 Export Data")
+        
+        # Fetch data for Excel
+        csr.execute("""
+            SELECT todo_title, todo_desc, todo_done, due_date, due_time, priority 
+            FROM mytodos WHERE todo_added=?
+        """, (st.session_state.username,))
+        rows = csr.fetchall()
 
-    
-    st.divider()
-    
-    # 1. Fetch all user data
-    csr.execute("""
-        SELECT todo_title, todo_desc, todo_done, due_date, due_time, priority 
-        FROM mytodos WHERE todo_added=?
-    """, (st.session_state.username,))
-    data = csr.fetchall()
+        if rows:
+            # Create DataFrame
+            df = pd.DataFrame(rows, columns=["Task", "Description", "Done", "Date", "Time", "Priority"])
+            
+            # Convert to Excel in memory
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Todos')
+            
+            # Download Button
+            st.download_button(
+                label="Download Excel",
+                data=buffer.getvalue(),
+                file_name=f"{st.session_state.username}_todos.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.caption("No tasks to export.")
 
-    # 2. Convert to DataFrame (Table)
-    df = pd.DataFrame(data, columns=["Task", "Description", "Done", "Date", "Time", "Priority"])
-    
-    # 3. Create Excel file in memory
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='My Todos')
-    
-    # 4. Create the Download Button
-    st.download_button(
-        label="📥 Download Excel",
-        data=buffer.getvalue(),
-        file_name=f"{st.session_state.username}_todos.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # --- INPUT SECTION ---
+    # --- ADD TASK SECTION ---
     with st.expander("➕ Add New Task", expanded=True):
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -145,10 +150,10 @@ else:
     
     for todo_id, t_title, t_desc, t_done, t_date, t_time, t_prio in todos:
         
-        # Priority Color Coding
+        # Priority Border Color
         border_color = "red" if "High" in t_prio else "orange" if "Medium" in t_prio else "blue"
         
-        # Card-like layout using a container
+        # Card container
         with st.container(border=True):
             c1, c2, c3 = st.columns([0.5, 4, 1])
             
@@ -167,7 +172,6 @@ else:
                 else:
                     st.markdown(f"**{t_title}**")
                 
-                # Metadata line (Date | Time | Priority)
                 st.caption(f"📅 {t_date} at {t_time} | {t_prio}")
                 if t_desc:
                     st.text(t_desc)
@@ -179,36 +183,25 @@ else:
                     conn.commit()
                     st.rerun()
 
-# -------------------------
-# DEBUG: Database Viewer
-# -------------------------
-st.divider()
-with st.expander("🔍 View Database (Debug Mode)"):
-    c1, c2 = st.tabs(["Tasks", "Users"])
-    
-    with c1:
-        st.subheader("All Tasks Table")
-        # Fetch raw data
-        csr.execute("SELECT * FROM mytodos")
-        data = csr.fetchall()
+    # -------------------------
+    # DEBUG: Database Viewer
+    # -------------------------
+    st.divider()
+    with st.expander("🔍 View Database (Debug Mode)"):
+        c1, c2 = st.tabs(["Tasks", "Users"])
         
-        # Display as a clean table
-        if data:
-            st.dataframe(data, column_config={
-                0: "ID",
-                1: "Owner",
-                2: "Title",
-                3: "Desc",
-                4: "Done",
-                5: "Date",
-                6: "Time",
-                7: "Priority"
-            })
-        else:
-            st.write("Table is empty.")
+        with c1:
+            st.subheader("All Tasks Table")
+            csr.execute("SELECT * FROM mytodos")
+            data = csr.fetchall()
+            if data:
+                # Display raw data
+                st.dataframe(pd.DataFrame(data), hide_index=True)
+            else:
+                st.write("Table is empty.")
 
-    with c2:
-        st.subheader("Registered Users")
-        csr.execute("SELECT username, password FROM users")
-        user_data = csr.fetchall()
-        st.write(user_data)
+        with c2:
+            st.subheader("Registered Users")
+            csr.execute("SELECT username, password FROM users")
+            user_data = csr.fetchall()
+            st.write(user_data)
