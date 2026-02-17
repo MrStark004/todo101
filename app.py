@@ -3,6 +3,7 @@ from auth_db import csr, conn
 import datetime
 import pandas as pd
 import io 
+import pytz # New import for Timezone
 
 # Page Configuration
 st.set_page_config(page_title="Pro Todo App", page_icon="✅", layout="centered")
@@ -103,12 +104,20 @@ else:
 
         desc = st.text_area("Description (Optional)")
 
-        # Date and Time Selection
+        # --- TIMEZONE FIX (IST) ---
         c1, c2 = st.columns(2)
+        
+        # 1. Set Timezone to India
+        ist = pytz.timezone('Asia/Kolkata')
+        now_ist = datetime.datetime.now(ist)
+        
+        # 2. STABILIZE TIME (Remove seconds to prevent resetting glitch)
+        default_time = now_ist.time().replace(second=0, microsecond=0)
+
         with c1:
-            due_date = st.date_input("Due Date", datetime.date.today())
+            due_date = st.date_input("Due Date", now_ist.date())
         with c2:
-            due_time = st.time_input("Due Time", datetime.datetime.now().time())
+            due_time = st.time_input("Due Time", value=default_time)
 
         if st.button("Add Task", type="primary"):
             if title:
@@ -149,9 +158,6 @@ else:
         st.info("No tasks found here. Relax! 🌴")
     
     for todo_id, t_title, t_desc, t_done, t_date, t_time, t_prio in todos:
-        
-        # Priority Border Color
-        border_color = "red" if "High" in t_prio else "orange" if "Medium" in t_prio else "blue"
         
         # Card container
         with st.container(border=True):
