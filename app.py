@@ -150,3 +150,37 @@ else:
                     csr.execute("DELETE FROM mytodos WHERE todo_id=?", (todo_id,))
                     conn.commit()
                     st.rerun()
+
+# -------------------------
+# DEBUG: Database Viewer
+# -------------------------
+st.divider()
+with st.expander("🔍 View Database (Debug Mode)"):
+    c1, c2 = st.tabs(["Tasks", "Users"])
+    
+    with c1:
+        st.subheader("All Tasks Table")
+        # Fetch raw data
+        csr.execute("SELECT * FROM mytodos")
+        data = csr.fetchall()
+        
+        # Display as a clean table
+        if data:
+            st.dataframe(data, column_config={
+                0: "ID",
+                1: "Owner",
+                2: "Title",
+                3: "Desc",
+                4: "Done",
+                5: "Date",
+                6: "Time",
+                7: "Priority"
+            })
+        else:
+            st.write("Table is empty.")
+
+    with c2:
+        st.subheader("Registered Users")
+        csr.execute("SELECT username, password FROM users")
+        user_data = csr.fetchall()
+        st.write(user_data)
