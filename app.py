@@ -19,7 +19,7 @@ st.markdown("""
     /* Gradient Buttons */
     div.stButton > button {
         background: linear-gradient(to right, #6a11cb 0%, #2575fc 100%);
-        color: white;
+        color: lightgreen;
         border: none;
         padding: 10px 24px;
         border-radius: 8px;
@@ -29,14 +29,15 @@ st.markdown("""
     
     /* Click Animation */
     div.stButton > button:active {
-        transform: scale(0.95);
-        filter: brightness(1.2);
+        transform: scale(0.90);
+        filter: brightness(1.5);
     }
     
     /* Card Hover Effect */
     [data-testid="stVerticalBlockBorderWrapper"] {
         transition: transform 0.3s ease, box-shadow 0.3s ease;
-        background-color: white;
+        background-color: lightblue;
+        padding: 12px
         border-radius: 12px;
     }
     
