@@ -1,6 +1,8 @@
 import streamlit as st
 from auth_db import csr, conn
 import datetime
+import pandas as pd
+import io
 
 # Page Configuration (Browser Tab Title & Icon)
 st.set_page_config(page_title="Pro Todo App", page_icon="✅", layout="centered")
@@ -59,6 +61,32 @@ else:
             st.rerun()
         st.divider()
         st.info("💡 Tip: Use the 'Priority' filter to focus on urgent tasks.")
+
+    
+    st.divider()
+    
+    # 1. Fetch all user data
+    csr.execute("""
+        SELECT todo_title, todo_desc, todo_done, due_date, due_time, priority 
+        FROM mytodos WHERE todo_added=?
+    """, (st.session_state.username,))
+    data = csr.fetchall()
+
+    # 2. Convert to DataFrame (Table)
+    df = pd.DataFrame(data, columns=["Task", "Description", "Done", "Date", "Time", "Priority"])
+    
+    # 3. Create Excel file in memory
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='My Todos')
+    
+    # 4. Create the Download Button
+    st.download_button(
+        label="📥 Download Excel",
+        data=buffer.getvalue(),
+        file_name=f"{st.session_state.username}_todos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     # --- INPUT SECTION ---
     with st.expander("➕ Add New Task", expanded=True):
