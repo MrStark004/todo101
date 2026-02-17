@@ -106,16 +106,43 @@ if st.session_state.authenticated:
 
         st.divider()
 
+# ... (Keep all your existing code for "If Logged In" above this) ...
+
 # -------------------------
-# Not Logged In
+# Not Logged In (The New Part)
 # -------------------------
 else:
-    st.warning("Please login first")
-    
-    # I added this button so you can test the app without building a full login page yet
-    if st.button("Simulate Login as 'Rahul'"):
-        st.session_state.authenticated = True
-        st.session_state.username = "Rahul"
-        st.rerun()
-        
-    st.markdown("[Go to Login Page](./login)")
+    # Create two tabs for cleaner UI
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+
+    # --- LOGIN TAB ---
+    with tab1:
+        st.header("Login")
+        login_user = st.text_input("Username", key="login_user")
+        login_pass = st.text_input("Password", type="password", key="login_pass")
+
+        if st.button("Login"):
+            from auth_db import verify_user
+            if verify_user(login_user, login_pass):
+                st.session_state.authenticated = True
+                st.session_state.username = login_user
+                st.success("Logged in successfully!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+
+    # --- SIGN UP TAB ---
+    with tab2:
+        st.header("Create Account")
+        new_user = st.text_input("New Username", key="new_user")
+        new_pass = st.text_input("New Password", type="password", key="new_pass")
+
+        if st.button("Sign Up"):
+            from auth_db import create_user
+            if new_user and new_pass:
+                if create_user(new_user, new_pass):
+                    st.success("Account created! You can now login.")
+                else:
+                    st.error("Username already taken!")
+            else:
+                st.warning("Please fill both fields")
