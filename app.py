@@ -3,10 +3,10 @@ from auth_db import csr, conn
 import datetime
 import pandas as pd
 import io 
-import pytz # New import for Timezone
+import pytz
 
 # Page Configuration
-st.set_page_config(page_title="Pro Todo App", page_icon="✅", layout="centered")
+st.set_page_config(page_title="Pro Task Manager", page_icon="✅", layout="centered")
 
 st.title("✅ Pro Task Manager")
 
@@ -58,7 +58,6 @@ else:
     with st.sidebar:
         st.write(f"👤 **{st.session_state.username}**")
         
-        # Logout
         if st.button("Logout"):
             st.session_state.authenticated = False
             st.rerun()
@@ -67,8 +66,6 @@ else:
         
         # --- EXCEL DOWNLOADER ---
         st.subheader("📥 Export Data")
-        
-        # Fetch data for Excel
         csr.execute("""
             SELECT todo_title, todo_desc, todo_done, due_date, due_time, priority 
             FROM mytodos WHERE todo_added=?
@@ -76,15 +73,11 @@ else:
         rows = csr.fetchall()
 
         if rows:
-            # Create DataFrame
             df = pd.DataFrame(rows, columns=["Task", "Description", "Done", "Date", "Time", "Priority"])
-            
-            # Convert to Excel in memory
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Todos')
             
-            # Download Button
             st.download_button(
                 label="Download Excel",
                 data=buffer.getvalue(),
@@ -94,120 +87,116 @@ else:
         else:
             st.caption("No tasks to export.")
 
-    # --- ADD TASK SECTION ---
+    # --- ADD TASK SECTION (INTERACTIVE UI) ---
     with st.expander("➕ Add New Task", expanded=True):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            title = st.text_input("Task Title")
-        with col2:
-            priority = st.selectbox("Priority", ["🔥 High", "⚡ Medium", "💤 Low"])
-
-        desc = st.text_area("Description (Optional)")
-
-        # --- TIMEZONE FIX (IST) ---
-        c1, c2 = st.columns(2)
+        st.caption("📝 Task Details")
+        title = st.text_input("Task Title", placeholder="What needs to be done?")
+        desc = st.text_area("Description", placeholder="Add some details...", height=68)
         
-        # 1. Set Timezone to India
+        st.divider()
+        st.caption("📅 Date & Time Machine")
+
+        # --- CUSTOM DATE SELECTOR ---
+        col_y, col_m, col_d = st.columns([1, 1, 1])
         ist = pytz.timezone('Asia/Kolkata')
-        now_ist = datetime.datetime.now(ist)
+        today = datetime.datetime.now(ist).date()
         
-        # 2. STABILIZE TIME (Remove seconds to prevent resetting glitch)
-        default_time = now_ist.time().replace(second=0, microsecond=0)
+        with col_y:
+            year = st.selectbox("Year", range(today.year, today.year + 5), index=0)
+        
+        with col_m:
+            month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            month = st.selectbox("Month", month_names, index=today.month - 1)
+        
+        with col_d:
+            day = st.selectbox("Day", range(1, 32), index=today.day - 1)
 
-        with c1:
-            due_date = st.date_input("Due Date", now_ist.date())
-        with c2:
-            due_time = st.time_input("Due Time", value=default_time)
+        # --- CUSTOM TIME SELECTOR ---
+        col_h, col_min, col_ampm = st.columns([2, 2, 1])
+        with col_h:
+            hour_12 = st.slider("Hour", 1, 12, 12)
+        with col_min:
+            minute = st.slider("Minute", 0, 55, 0, step=5)
+        with col_ampm:
+            ampm = st.radio("Period", ["AM", "PM"], horizontal=True)
 
-        if st.button("Add Task", type="primary"):
-            if title:
-                csr.execute(
-                    """INSERT INTO mytodos 
-                    (todo_added, todo_title, todo_desc, todo_done, due_date, due_time, priority) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (st.session_state.username, title, desc, False, str(due_date), str(due_time), priority)
-                )
-                conn.commit()
-                st.success("Task added!")
-                st.rerun()
+        st.divider()
+        priority = st.select_slider("Priority Level", options=["Low 💤", "Medium ⚡", "High 🔥"], value="Medium ⚡")
+
+        if st.button("Add Task", type="primary", use_container_width=True):
+            if not title:
+                st.warning("⚠️ Please enter a Task Title!")
             else:
-                st.warning("Please enter a task title.")
+                try:
+                    # Date Handling
+                    month_num = month_names.index(month) + 1
+                    try:
+                        selected_date = datetime.date(year, month_num, day)
+                    except ValueError:
+                        st.error(f"⚠️ Invalid Date: {month} {day} doesn't exist!")
+                        st.stop()
+
+                    # Time Handling (12h to 24h)
+                    if ampm == "PM" and hour_12 != 12:
+                        hour_24 = hour_12 + 12
+                    elif ampm == "AM" and hour_12 == 12:
+                        hour_24 = 0
+                    else:
+                        hour_24 = hour_12
+                    final_time = datetime.time(hour_24, minute)
+
+                    # Save
+                    csr.execute(
+                        """INSERT INTO mytodos 
+                        (todo_added, todo_title, todo_desc, todo_done, due_date, due_time, priority) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (st.session_state.username, title, desc, False, str(selected_date), str(final_time), priority)
+                    )
+                    conn.commit()
+                    st.balloons()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
     st.divider()
 
-    # --- FILTER SECTION ---
+    # --- TASK LIST ---
     filter_status = st.radio("Show:", ["All", "Pending", "Completed"], horizontal=True)
-
-    # --- FETCH DATA ---
     query = "SELECT todo_id, todo_title, todo_desc, todo_done, due_date, due_time, priority FROM mytodos WHERE todo_added=?"
     params = [st.session_state.username]
 
-    if filter_status == "Pending":
-        query += " AND todo_done=0"
-    elif filter_status == "Completed":
-        query += " AND todo_done=1"
-        
-    # Sort by Date (So urgent stuff is at the top)
+    if filter_status == "Pending": query += " AND todo_done=0"
+    elif filter_status == "Completed": query += " AND todo_done=1"
     query += " ORDER BY due_date ASC, due_time ASC"
 
     csr.execute(query, tuple(params))
     todos = csr.fetchall()
 
-    # --- DISPLAY TASKS ---
     if not todos:
-        st.info("No tasks found here. Relax! 🌴")
+        st.info("No tasks found. Relax! 🌴")
     
     for todo_id, t_title, t_desc, t_done, t_date, t_time, t_prio in todos:
-        
-        # Card container
         with st.container(border=True):
             c1, c2, c3 = st.columns([0.5, 4, 1])
-            
             with c1:
-                # Checkbox
                 is_done = st.checkbox("", value=bool(t_done), key=f"check_{todo_id}")
                 if is_done != bool(t_done):
                     csr.execute("UPDATE mytodos SET todo_done=? WHERE todo_id=?", (is_done, todo_id))
                     conn.commit()
                     st.rerun()
-
             with c2:
-                # Title and Details
-                if t_done:
-                    st.markdown(f"~~**{t_title}**~~")
-                else:
-                    st.markdown(f"**{t_title}**")
-                
+                if t_done: st.markdown(f"~~**{t_title}**~~")
+                else: st.markdown(f"**{t_title}**")
                 st.caption(f"📅 {t_date} at {t_time} | {t_prio}")
-                if t_desc:
-                    st.text(t_desc)
-
+                if t_desc: st.text(t_desc)
             with c3:
-                # Delete Button
                 if st.button("🗑️", key=f"del_{todo_id}"):
                     csr.execute("DELETE FROM mytodos WHERE todo_id=?", (todo_id,))
                     conn.commit()
                     st.rerun()
 
-    # -------------------------
-    # DEBUG: Database Viewer
-    # -------------------------
+    # --- DEBUG VIEW ---
     st.divider()
-    with st.expander("🔍 View Database (Debug Mode)"):
-        c1, c2 = st.tabs(["Tasks", "Users"])
-        
-        with c1:
-            st.subheader("All Tasks Table")
-            csr.execute("SELECT * FROM mytodos")
-            data = csr.fetchall()
-            if data:
-                # Display raw data
-                st.dataframe(pd.DataFrame(data), hide_index=True)
-            else:
-                st.write("Table is empty.")
-
-        with c2:
-            st.subheader("Registered Users")
-            csr.execute("SELECT username, password FROM users")
-            user_data = csr.fetchall()
-            st.write(user_data)
+    with st.expander("🔍 View Database (Debug)"):
+        csr.execute("SELECT * FROM mytodos")
+        st.dataframe(pd.DataFrame(csr.fetchall()), hide_index=True)
